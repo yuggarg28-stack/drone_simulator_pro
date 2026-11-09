@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#081321" />
+  <meta name="description" content="Drone Simulator Pro: simulated autonomous flight, LiDAR, weather, FPV gimbal and recording." />
+  <title>Drone Simulator Pro · Flight Studio | Yug Garg</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      --bg: #091523;
+      --glass: rgba(10, 24, 39, .88);
+      --glass-bright: rgba(22, 41, 60, .89);
+      --line: rgba(143, 190, 215, .20);
+      --line-strong: rgba(89, 210, 210, .28);
+      --ink: #f0faff;
+      --muted: #a0b9c8;
+      --accent: #5bf2df;
+      --blue: #71beff;
+      --amber: #ffcf70;
+      --red: #ff6177;
+      --shadow: 0 18px 50px rgba(0, 7, 16, .30);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--bg); }
+    body { color:var(--ink); }
+    #scene-canvas { display:block; width:100%; height:100%; }
+    body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:1;
+      background:linear-gradient(90deg,rgba(3,12,23,.25),transparent 26%,transparent 74%,rgba(3,12,23,.19)),
+                 linear-gradient(0deg,rgba(3,12,23,.34),transparent 20%,transparent 75%,rgba(3,12,23,.14)); }
+    button, select, input { font:inherit; }
+    button { cursor:pointer; transition:background .18s ease, border-color .18s ease, transform .18s ease; }
+    button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    button:active { transform:translateY(1px); }
+    .glass { background:var(--glass); border:1px solid var(--line); box-shadow:var(--shadow); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+    .eyebrow { font-size:10px; text-transform:uppercase; letter-spacing:.17em; font-weight:800; color:var(--muted); }
+    .accent { color:var(--accent); }
+    .muted { color:var(--muted); font-size:11px; line-height:1.55; }
+    .section-title { margin:0 0 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    .section-title::before { content:""; width:5px; height:17px; border-radius:4px; background:linear-gradient(180deg,var(--accent),var(--blue)); flex:0 0 5px; }
+    .section-title span:first-child { flex:1; }
+    .mini-tag { padding:4px 6px; border:1px solid var(--line); border-radius:5px; color:var(--muted); font-size:9px; letter-spacing:.08em; }
+    .hud-panel { background:var(--glass); border:1px solid var(--line); border-radius:15px; padding:15px 16px; box-shadow:var(--shadow); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+    .hud-panel:hover { border-color:var(--line-strong); }
+    .hud-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; font-weight:700; }
+    .metric { color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
+    .meter-track { height:8px; border-radius:99px; overflow:hidden; background:#2d4052; }
+    #battery-fill, #health-fill { display:block; height:100%; width:100%; border-radius:99px; background:#35deab; transition:width .25s ease,background .25s ease; }
+    #battery-status { margin-top:8px; color:#35deab; font-size:11px; }
+    #flight-status { color:var(--accent); font-size:11px; font-weight:800; letter-spacing:.09em; margin:10px 0 8px; }
+    .input-btn { display:block; border:1px solid rgba(126,183,215,.28); background:rgba(33,65,85,.66); padding:9px 10px; color:var(--ink); border-radius:9px; font-size:11px; font-weight:700; text-align:center; }
+    .input-btn:hover { background:rgba(45,100,121,.78); border-color:var(--accent); }
+    .input-btn.active { color:#03191b; background:var(--accent); border-color:var(--accent); }
+    .input-btn.danger { background:rgba(182,40,70,.27); color:#ffd9df; border-color:rgba(255,97,119,.65); }
+
+    /* Command bar */
+    #topbar { position:fixed; z-index:30; top:16px; left:18px; right:18px; min-height:68px; padding:10px 16px;
+      border-radius:17px; display:flex; align-items:center; justify-content:space-between; gap:18px; }
+    #brand { display:flex; align-items:center; gap:11px; min-width:235px; }
+    .brand-glyph { width:40px; height:40px; display:grid; place-items:center; color:#031a20;
+      background:linear-gradient(145deg,var(--accent),#67bdfb); border-radius:12px; box-shadow:0 0 25px rgba(91,242,223,.18); }
+    .brand-glyph svg { width:25px; height:25px; }
+    .brand-title { font-size:17px; line-height:1.08; font-weight:900; letter-spacing:.07em; white-space:nowrap; }
+    .brand-sub { font-size:10px; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; margin-top:5px; }
+    #top-status { display:flex; align-items:center; justify-content:center; gap:12px; flex:1; }
+    .status-chip { display:flex; align-items:center; gap:7px; border:1px solid var(--line); background:rgba(58,93,118,.15);
+      color:#c6deeb; border-radius:99px; font-size:10px; font-weight:750; padding:9px 12px; white-space:nowrap; }
+    .led { width:7px; height:7px; flex:0 0 7px; background:#48e2aa; border-radius:50%; box-shadow:0 0 12px #39db9c; }
+    #mode-display { color:var(--accent); }
+    #record-indicator { color:#ffc2c8; display:none; border-color:rgba(255,97,119,.52); }
+    #record-indicator .led { background:var(--red); box-shadow:0 0 12px var(--red); animation:recblink 1.1s infinite alternate; }
+    @keyframes recblink { to {opacity:.3;} }
+    #timer { font:800 17px ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.04em; white-space:nowrap; color:white; padding:7px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(68,109,135,.16); }
+
+    /* Left navigation rail and map */
+
+    /* Aircraft vitals moved from the right inspector to the left navigation rail */
+    #vitals-panel { padding:13px 14px 12px; flex-shrink:0; border-color:rgba(91,242,223,.27); }
+    .vital-item { margin-top:12px; }
+    .vital-item:first-of-type { margin-top:5px; }
+    .vital-item .hud-row { margin-bottom:7px; font-size:11px; }
+    #vitals-panel .meter-track { height:7px; }
+    #vitals-panel #battery-status { margin-top:6px; font-size:10px; }
+    #vitals-panel .vitals-hint { font-size:10px; line-height:1.4; color:var(--muted); margin:9px 0 0; }
+
+    #left-rail { position:fixed; z-index:20; top:98px; bottom:96px; left:18px; width:254px; display:flex; flex-direction:column; gap:10px;
+      overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:1px 3px 3px 1px; }
+    #minimap-panel { padding:13px; flex-shrink:0; }
+    #minimap-canvas { display:block; width:100%; aspect-ratio:1/1; height:auto; background:#10283b; border:1px solid rgba(111,171,203,.36); border-radius:10px; }
+    #osm-attribution {display:block;font-size:10px;line-height:1.5;margin-top:7px;color:#a2ddec;}
+    #osm-attribution[hidden], #osm-data-status[hidden] {display:none;}
+    #minimap-position { margin-top:9px; font:700 11px ui-monospace,Consolas,monospace; text-align:center; letter-spacing:.06em; color:var(--accent); }
+    .map-legend { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; color:var(--muted); font-size:10px; }
+    .legend-dot { width:7px; height:7px; display:inline-block; border-radius:50%; margin-right:5px; }
+    #controls { padding:13px; font-size:11px; line-height:1.5; }
+    #controls summary { cursor:pointer; font-size:12px; font-weight:800; letter-spacing:.03em; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+    #controls summary::after { content:"⌄"; color:var(--accent); font-size:17px; line-height:1; }
+    #controls[open] summary::after { content:"⌃"; }
+    #controls p { margin:7px 0; color:var(--muted); }
+    #controls strong { color:#d8f7ff; }
+    .key { display:inline-block; border:1px solid rgba(130,190,210,.36); background:rgba(60,91,114,.25);
+      padding:0 5px; min-width:18px; border-radius:4px; font:700 10px ui-monospace,Consolas,monospace; color:#e8fbff; }
+
+    /* Inspector */
+    #right-hud { position:fixed; z-index:20; top:98px; bottom:96px; right:18px; width:318px; display:flex; flex-direction:column; gap:10px;
+      overflow-y:auto; padding:1px 3px 3px 1px; scrollbar-color:#3f6176 transparent; scrollbar-width:thin; overscroll-behavior:contain; }
+    #flight-hud { font:700 12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--accent); white-space:normal; }
+    #environment-select { width:100%; margin:2px 0 9px; color:#f0faff; background:#17364d; border:1px solid var(--line);
+      border-radius:9px; padding:10px; font-size:12px; }
+    #environment-summary { margin:9px 0 0; }
+    #environment-next, #lidar-beams, #weather-toggle { width:100%; }
+    .dynamics-grid, .lidar-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .dyn-cell, .lidar-cell { border:1px solid rgba(152,208,222,.10); background:rgba(53,84,106,.20); padding:9px; border-radius:9px; min-width:0; }
+    .dyn-label, .lidar-cell span { color:var(--muted); display:block; font-size:10px; margin-bottom:4px; }
+    .dyn-value, .lidar-cell strong { font:800 13px ui-monospace,Consolas,monospace; color:var(--ink); }
+    #attitude-window { height:66px; position:relative; overflow:hidden; border-radius:10px; margin-bottom:12px; border:1px solid #4b7384; background:#16405c; }
+    #attitude-indicator { position:absolute; top:50%; left:50%; width:220%; height:250%; background:linear-gradient(to bottom,#2f8fc1 0%,#2f8fc1 50%,#846249 50%,#846249 100%); transform:translate(-50%,-50%); }
+    #attitude-window::after { content:""; position:absolute; top:50%; left:50%; width:60px; height:2px; transform:translate(-50%,-50%); background:#eefaff; box-shadow:0 0 5px #000; }
+    #lidar-status, #lidar-avoidance { font-size:11px; color:var(--accent); font-weight:800; }
+    #lidar-status { margin:0 0 10px; }
+    #lidar-avoidance { font-family:ui-monospace,Consolas,monospace; }
+    .wind { display:flex; justify-content:space-between; align-items:center; color:#ceecff; font-size:12px; margin-bottom:10px; }
+    .wind strong { color:var(--accent); }
+    #weather-hint { margin-bottom:10px; }
+
+    /* FPV camera studio */
+    #camera-panel .camera-callout { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:2px 0 15px; }
+    #gimbal-state { display:inline-flex; padding:5px 8px; font:800 10px ui-monospace,Consolas,monospace; color:var(--accent);
+      background:rgba(67,210,200,.12); border:1px solid rgba(90,242,223,.24); border-radius:7px; }
+    .camera-range { display:block; margin:0 0 15px; }
+    .camera-range .range-head { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:7px; }
+    .camera-range .range-head span { font-size:11px; color:var(--muted); }
+    .camera-range output { font:800 12px ui-monospace,Consolas,monospace; color:var(--ink); }
+    .camera-range input { width:100%; display:block; cursor:pointer; accent-color:#5bf2df; }
+    .button-pair { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    #recording-status { color:var(--muted); font-size:11px; line-height:1.4; margin-top:10px; }
+    #recording-status.recording { color:#ffb5c0; font-weight:700; }
+    #capture-note { color:var(--muted); font-size:10px; line-height:1.5; margin-top:9px; }
+
+    /* Bottom action bar */
+    #action-dock { position:fixed; z-index:30; bottom:17px; left:50%; transform:translateX(-50%); padding:8px; max-width:calc(100vw - 40px);
+      border-radius:16px; display:flex; align-items:stretch; gap:7px; }
+    .dock-btn { min-width:108px; padding:10px 12px; border:1px solid rgba(151,198,222,.21); border-radius:11px; background:rgba(51,88,115,.32);
+      color:#e7f5fc; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; }
+    .dock-btn:hover { background:rgba(59,125,153,.55); border-color:var(--accent); }
+    .dock-btn.primary { color:#071f25; background:linear-gradient(130deg,#6cf3e0,#77c9fb); border-color:transparent; }
+    .dock-btn.recording { background:linear-gradient(135deg,#a83552,#e34b61); border-color:#ff7e90; color:white; }
+    .dock-separator { width:1px; margin:5px 2px; background:var(--line); }
+    #crosshair { position:fixed; z-index:4; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none;
+      width:34px; height:34px; border:1px solid rgba(210,251,251,.25); border-radius:50%; }
+    #crosshair::before,#crosshair::after { content:""; position:absolute; background:#e6fcff; box-shadow:0 0 5px #0b2836; }
+    #crosshair::before { width:1px; height:18px; left:16px; top:8px; }
+    #crosshair::after { height:1px; width:18px; left:8px; top:16px; }
+    #center-label { position:fixed; z-index:4; top:calc(50% + 29px); left:50%; transform:translateX(-50%);
+      pointer-events:none; font:700 10px ui-monospace,Consolas,monospace; letter-spacing:.22em; color:rgba(232,252,255,.75); text-shadow:0 2px 9px #05111c; }
+    #author-credit { position:fixed; z-index:9; right:21px; bottom:17px; font-size:10px; line-height:1.5; color:rgba(227,244,252,.70); text-align:right; pointer-events:none; }
+    #author-credit b { color:#eaffff; font-weight:700; }
+    #battery-warning, #damage-warning { display:none; z-index:50; position:fixed; top:100px; left:50%; transform:translateX(-50%);
+      max-width:min(510px,calc(100vw - 40px)); background:rgba(127,32,47,.96); color:white; border:1px solid #ff7888;
+      border-radius:10px; padding:12px 18px; text-align:center; font-size:12px; font-weight:800; pointer-events:none; }
+    #damage-warning { top:151px; background:rgba(103,60,20,.94); border-color:#ffc16b; }
+    #toast { position:fixed; z-index:65; bottom:98px; left:50%; transform:translateX(-50%) translateY(14px);
+      max-width:min(450px,calc(100vw - 38px)); padding:12px 18px; background:rgba(12,33,47,.96); border:1px solid rgba(91,242,223,.55);
+      color:#e6fffd; border-radius:10px; box-shadow:var(--shadow); font-size:12px; font-weight:700;
+      opacity:0; pointer-events:none; transition:opacity .18s,transform .18s; text-align:center; }
+    #toast.visible { opacity:1; transform:translateX(-50%) translateY(0); }
+    #error-display { display:none; position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:100;
+      padding:12px; max-width:80vw; background:#861d28; color:white; border:1px solid #ffb0b9; border-radius:8px; white-space:pre-wrap; font:12px monospace; }
+
+    @media (max-width:1120px) {
+      #top-status .status-chip:nth-child(2) { display:none; }
+      #brand { min-width:195px; }
+      #left-rail { width:218px; }
+      #right-hud { width:288px; }
+      .dock-btn { min-width:95px; }
+      #author-credit { display:none; }
+    }
+    @media (max-width:780px) {
+      #topbar { top:8px; left:8px; right:8px; padding:9px 11px; min-height:56px; border-radius:12px; gap:7px; }
+      #brand { min-width:auto; gap:7px; }
+      .brand-glyph { width:30px; height:30px; border-radius:9px; }
+      .brand-glyph svg { width:21px; height:21px; }
+      .brand-title { font-size:11px; }
+      .brand-sub { font-size:8px; letter-spacing:.08em; margin-top:2px; }
+      #top-status { justify-content:flex-end; gap:5px; }
+      #top-status .status-chip:not(#record-indicator) { display:none; }
+      .status-chip { padding:6px 7px; font-size:9px; }
+      #timer { font-size:11px; padding:8px 6px; }
+      #left-rail { top:72px; left:8px; bottom:79px; width:37vw; min-width:134px; max-width:188px; gap:7px; }
+      #right-hud { top:72px; right:8px; bottom:79px; width:40vw; min-width:148px; max-width:210px; gap:7px; }
+      .hud-panel { padding:10px; border-radius:10px; }
+      .section-title { font-size:9px; letter-spacing:.07em; margin-bottom:8px; }
+      #minimap-panel { padding:7px; }
+      .map-legend { grid-template-columns:1fr; font-size:9px; gap:4px; }
+      #osm-attribution {display:block;font-size:10px;line-height:1.5;margin-top:7px;color:#a2ddec;}
+    #osm-attribution[hidden], #osm-data-status[hidden] {display:none;}
+    #minimap-position { font-size:9px; }
+      .dyn-value,.lidar-cell strong { font-size:10px; }
+      .dynamics-grid,.lidar-grid { gap:4px; }
+      .dyn-cell,.lidar-cell { padding:5px; }
+      #controls { font-size:10px; }
+      #action-dock { bottom:8px; gap:4px; padding:5px; width:max-content; max-width:calc(100vw - 16px); }
+      .dock-btn { padding:9px 7px; min-width:0; font-size:9px; }
+      #recording-status { font-size:10px; }
+      #center-label { display:none; }
+      #toast { bottom:79px; }
+    }
+    @media(max-width:390px) {
+      .brand-sub { display:none; }
+      #left-rail { width:35vw; min-width:118px; }
+      #right-hud { width:40vw; min-width:137px; }
+      .dock-btn { font-size:8px; }
+    }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after {animation-duration:.01ms !important;transition-duration:.01ms !important;} }
+
+    /* Flight Studio 2.0: always-visible vital gauges, uncluttered map, collapsible rails */
+    #topbar { gap:12px; }
+    #brand { min-width:215px; }
+    #top-vitals { display:flex; flex:0 1 260px; min-width:205px; gap:14px; align-items:center;
+      padding:8px 11px; border:1px solid rgba(116,192,215,.19); border-radius:12px; background:rgba(19,45,63,.60); }
+    .vital-strip-item { flex:1; min-width:0; }
+    .vital-strip-label { display:flex; justify-content:space-between; gap:7px; font-size:9px; font-weight:800;
+      color:#a8d2dc; letter-spacing:.06em; margin-bottom:6px; }
+    .vital-strip-label strong { color:#ecfeff; font-size:11px; font-variant-numeric:tabular-nums; }
+    #top-vitals .meter-track { height:6px; }
+    #top-vitals #battery-status { margin:0; }
+    .sr-only { position:absolute!important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+      clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    #top-status { min-width:0; }
+    #top-status .status-chip { padding:7px 9px; }
+    #minimap-panel { position:sticky; top:0; z-index:2; border-color:rgba(91,242,223,.24); }
+    #left-rail, #right-hud { transition:transform .24s ease,opacity .24s ease,visibility .24s ease; }
+    body.hide-left #left-rail { transform:translateX(calc(-100% - 35px)); opacity:0; visibility:hidden; pointer-events:none; }
+    body.hide-right #right-hud { transform:translateX(calc(100% + 35px)); opacity:0; visibility:hidden; pointer-events:none; }
+    #view-controls { position:fixed; z-index:31; top:96px; left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:5px; border-radius:12px; padding:5px; }
+    .view-btn { display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:8px;
+      padding:7px 11px; background:transparent; color:#c5e0eb; font-size:10px; font-weight:800; white-space:nowrap; }
+    .view-btn:hover { background:rgba(85,156,176,.22); }
+    .view-btn[aria-expanded="false"] { color:#849eae; }
+    .view-btn.primary { background:rgba(86,203,210,.15); border-color:rgba(86,203,210,.23); color:#81f9eb; }
+    .view-btn[aria-pressed="true"] { background:#66e5db; border-color:transparent; color:#09222a; }
+    #fpv-overlay { position:fixed; z-index:5; bottom:90px; left:50%; transform:translateX(-50%);
+      pointer-events:none; display:flex; align-items:center; justify-content:center; gap:13px; max-width:calc(100vw - 30px);
+      color:rgba(222,249,251,.92); padding:7px 11px; border:1px solid rgba(113,196,204,.19); border-radius:9px;
+      background:rgba(7,24,33,.54); backdrop-filter:blur(10px); font:800 10px ui-monospace,Consolas,monospace;
+      letter-spacing:.06em; white-space:nowrap; text-shadow:0 1px 5px #001923; }
+    #fpv-overlay-live { color:#8de9e6; }
+    .tiny-led { display:inline-block; margin-right:5px; border-radius:50%; width:5px; height:5px; background:#61ddcf; }
+    #fpv-overlay-rec { color:#ff9aa8; }
+    #fpv-overlay-rec:not([hidden]) { display:inline; }
+    @media(max-width:1200px) {
+      #brand { min-width:180px; }
+      .brand-sub { font-size:8px; }
+      #top-vitals { flex-basis:210px; min-width:180px; gap:8px; }
+      #top-status .status-chip:first-child { display:none; }
+    }
+    @media(max-width:780px) {
+      #topbar { flex-wrap:wrap; min-height:66px; }
+      #brand { flex:1; min-width:110px; }
+      #top-vitals { order:3; flex:1 1 100%; min-width:0; height:28px; padding:3px 7px; gap:10px; }
+      .vital-strip-label { margin-bottom:3px; font-size:8px; }
+      .vital-strip-label strong { font-size:9px; }
+      #top-vitals .meter-track { height:3px; }
+      #top-status { display:none; }
+      #timer { font-size:10px; }
+      #view-controls { top:105px; padding:4px; gap:0; }
+      .view-btn { padding:6px 8px; font-size:9px; }
+      #left-rail,#right-hud { top:145px; }
+      #fpv-overlay { bottom:71px; font-size:8px; padding:6px 8px; gap:7px; }
+    }
+    @media(max-width:450px) {
+      #view-controls { top:105px; }
+      #fpv-overlay-metrics { display:none; }
+      .view-btn { font-size:8px; padding:5px 7px; }
+      #left-rail,#right-hud { top:142px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="error-display" role="alert"></div>
+  <div id="crosshair" aria-hidden="true"></div>
+  <div id="center-label" aria-hidden="true">LIVE FLIGHT VIEW</div>
+
+  <header id="topbar" class="glass" aria-label="Simulator command bar">
+    <div id="brand">
+      <span class="brand-glyph" aria-hidden="true"><svg fill="none" viewBox="0 0 32 32"><path d="M16 8v16M8 16h16M7 7l6 6m6 6 6 6M25 7l-6 6m-6 6-6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="16" cy="16" r="4" fill="currentColor"/><circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="6" r="3" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="26" r="3" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="26" r="3" stroke="currentColor" stroke-width="2"/></svg></span>
+      <div><div class="brand-title">DRONE<span class="accent">SIM</span> PRO</div><div class="brand-sub">Flight operations studio</div></div>
+    </div>
+    <div id="top-vitals" role="group" aria-label="Simulated aircraft vitals">
+      <div class="vital-strip-item" id="battery-panel">
+        <div class="vital-strip-label"><span>BATTERY</span><strong id="battery-percent">100%</strong></div>
+        <div class="meter-track"><div id="battery-fill"></div></div>
+        <span id="battery-status" class="sr-only">Battery Healthy</span>
+      </div>
+      <div class="vital-strip-item" id="health-panel">
+        <div class="vital-strip-label"><span>HEALTH</span><strong id="health-percent">100%</strong></div>
+        <div class="meter-track"><div id="health-fill"></div></div>
+      </div>
+    </div>
+    <div id="top-status">
+      <span class="status-chip"><i class="led" aria-hidden="true"></i> SIMULATION ACTIVE</span>
+      <span id="mode-display" class="status-chip">Normal Mode</span>
+      <span id="record-indicator" class="status-chip" role="status" aria-live="polite"><i class="led" aria-hidden="true"></i> <span id="record-timer">REC 00:00</span></span>
+    </div>
+    <div id="timer" aria-label="Mission timer">Time: 0.0s</div>
+  </header>
+
+  <nav id="view-controls" class="glass" aria-label="Interface layout controls">
+    <button id="toggle-map" class="view-btn" type="button" aria-controls="left-rail" aria-expanded="true" title="Show or hide navigation sidebar">◈ Navigation</button>
+    <button id="toggle-instruments" class="view-btn" type="button" aria-controls="right-hud" aria-expanded="true" title="Show or hide instrument sidebar">▥ Instruments</button>
+    <button id="toggle-focus" class="view-btn primary" type="button" aria-pressed="false" title="Show only the flight view">⛶ Focus view</button>
+  </nav>
+
+  <aside id="left-rail" aria-label="Flight navigation">
+    <section id="minimap-panel" class="hud-panel" aria-label="GPS-style local minimap">
+      <h2 class="section-title"><span>Navigation</span><span class="mini-tag">LOCAL MAP</span></h2>
+      <canvas id="minimap-canvas" width="260" height="260" aria-label="Top-down view of drone, home, obstacles, checkpoint rings and flight path"></canvas>
+      <div id="minimap-position">X 0.0 | Z 0.0</div>
+      <a id="osm-attribution" href="https://www.openstreetmap.org/copyright" rel="noopener noreferrer" target="_blank" hidden>Map data © OpenStreetMap contributors · ODbL</a>
+      <div class="map-legend">
+        <span><i class="legend-dot" style="background:#38bdf8"></i> Home</span>
+        <span><i class="legend-dot" style="background:#fb7185"></i> Drone</span>
+        <span><i class="legend-dot" style="background:#facc15"></i> Checkpoints</span>
+        <span><i class="legend-dot" style="background:#7e98a7"></i> Obstacles</span>
+      </div>
+    </section>
+    <details id="controls" class="hud-panel">
+      <summary>Flight key bindings</summary>
+      <p><strong>Motion</strong></p>
+      <p><span class="key">W</span>/<span class="key">S</span> forward / backward · <span class="key">A</span>/<span class="key">D</span> strafe and bank</p>
+      <p><span class="key">↑</span>/<span class="key">↓</span> pitch · <span class="key">Q</span>/<span class="key">E</span> yaw</p>
+      <p><span class="key">Space</span> ascend · <span class="key">Shift</span> descend</p>
+      <p><strong>Flight systems</strong></p>
+      <p><span class="key">B</span> beginner mode · <span class="key">C</span> camera · <span class="key">H</span> home · <span class="key">R</span> restart</p>
+      <p><span class="key">V</span> weather · <span class="key">N</span> environment · <span class="key">L</span> LiDAR beams</p>
+      <p><strong>Camera studio</strong></p>
+      <p><span class="key">G</span> tilt down · <span class="key">T</span> tilt up · <span class="key">Z</span>/<span class="key">X</span> zoom</p>
+      <p><span class="key">O</span> video start/stop · <span class="key">P</span> photo</p>
+      <p>Beginner mode: click flight scene for mouse steering; Esc releases cursor.</p>
+    </details>
+    <div class="hud-panel" style="padding:11px 13px;"><div class="eyebrow">Simulation coordinates</div><p class="muted" style="margin:6px 0 0;">Map and instruments use game units, not GPS or real aircraft measurements.</p></div>
+  </aside>
+
+  <aside id="right-hud" aria-label="Flight instrumentation and camera controls">
+    <section class="hud-panel">
+      <h2 class="section-title"><span>Live telemetry</span><span class="mini-tag">REAL-TIME</span></h2>
+      <div id="flight-hud">Altitude: 5.0 units | Speed: 0.0 u/s | Rings: 0/10</div>
+    </section>
+
+    <section id="dynamics-panel" class="hud-panel" aria-label="Flight dynamics">
+      <h2 class="section-title"><span>Flight dynamics</span><span class="mini-tag">ATTITUDE</span></h2>
+      <div id="attitude-window" aria-label="Artificial horizon"><div id="attitude-indicator"></div></div>
+      <div class="dynamics-grid">
+        <div class="dyn-cell"><span class="dyn-label">PITCH</span><span id="dyn-pitch" class="dyn-value">0°</span></div>
+        <div class="dyn-cell"><span class="dyn-label">ROLL</span><span id="dyn-roll" class="dyn-value">0°</span></div>
+        <div class="dyn-cell"><span class="dyn-label">YAW</span><span id="dyn-yaw" class="dyn-value">0°</span></div>
+        <div class="dyn-cell"><span class="dyn-label">VERTICAL SPEED</span><span id="dyn-vertical" class="dyn-value">0 u/s</span></div>
+        <div class="dyn-cell"><span class="dyn-label">ACCELERATION</span><span id="dyn-acceleration" class="dyn-value">0 u/s²</span></div>
+        <div class="dyn-cell"><span class="dyn-label">AUTOPILOT</span><span id="dyn-autopilot" class="dyn-value">MANUAL</span></div>
+      </div>
+    </section>
+
+    <section id="camera-panel" class="hud-panel" aria-label="FPV camera gimbal and recording">
+      <h2 class="section-title"><span>Camera studio</span><span class="mini-tag">FPV / REC</span></h2>
+      <div class="camera-callout"><div class="muted">Gimbal &amp; field of view</div><span id="gimbal-state">STABILIZED</span></div>
+      <label class="camera-range" for="gimbal-pitch">
+        <span class="range-head"><span>Gimbal tilt</span><output id="gimbal-pitch-value" for="gimbal-pitch">−12°</output></span>
+        <input id="gimbal-pitch" type="range" min="-75" max="30" step="1" value="-12" />
+      </label>
+      <label class="camera-range" for="gimbal-yaw">
+        <span class="range-head"><span>Gimbal pan</span><output id="gimbal-yaw-value" for="gimbal-yaw">0°</output></span>
+        <input id="gimbal-yaw" type="range" min="-90" max="90" step="1" value="0" />
+      </label>
+      <label class="camera-range" for="gimbal-zoom">
+        <span class="range-head"><span>Digital zoom</span><output id="gimbal-zoom-value" for="gimbal-zoom">1.0×</output></span>
+        <input id="gimbal-zoom" type="range" min="1" max="3" step="0.1" value="1" />
+      </label>
+      <div class="button-pair">
+        <button id="gimbal-stabilize" type="button" class="input-btn active" aria-pressed="true">Stabilization ON</button>
+        <button id="gimbal-reset" type="button" class="input-btn">Reset gimbal</button>
+      </div>
+      <div id="recording-status" role="status" aria-live="polite">Recorder ready · records the visible 3D view</div>
+      <p id="capture-note">Switch to FPV with C to see gimbal changes. Video saves locally in a browser-supported format. Panels are not included in the video.</p>
+    </section>
+
+    <section id="environment-panel" class="hud-panel" aria-label="Select 3D environment">
+      <h2 class="section-title"><span>3D environment</span><span class="mini-tag">06 WORLD TYPES</span></h2>
+      <select id="environment-select" aria-label="Choose flight environment">
+        <option value="CITY">City</option><option value="FOREST">Forest</option>
+        <option value="MOUNTAINS">Mountains</option><option value="DESERT">Desert</option><option value="NIGHT_CITY">Night City</option>
+        <option value="CHANDIGARH_OSM">Chandigarh · Sector 17 (real OSM)</option>
+      </select>
+      <button type="button" id="environment-next" class="input-btn">Next environment (N)</button>
+      <p id="environment-summary" class="muted">Buildings, open streets and training checkpoints.</p>
+      <div id="osm-data-status" class="muted" hidden aria-live="polite"></div>
+    </section>
+
+    <section id="systems-panel" class="hud-panel" aria-label="Autopilot and camera status">
+      <h2 class="section-title"><span>Flight systems</span><span class="mini-tag">STATUS</span></h2>
+      <p id="flight-status" role="status">MANUAL FLIGHT</p>
+      <div class="muted">Camera: <span id="camera-mode">Third-person</span></div>
+    </section>
+
+    <section id="lidar-panel" class="hud-panel" aria-label="Simulated LiDAR sensors">
+      <h2 class="section-title"><span>LiDAR &amp; avoidance</span><span class="mini-tag">5 RAYS</span></h2>
+      <p id="lidar-status" role="status">SCANNING</p>
+      <div class="lidar-grid">
+        <div class="lidar-cell"><span>FRONT</span><strong id="lidar-front">25.0 u</strong></div>
+        <div class="lidar-cell"><span>LEFT</span><strong id="lidar-left">25.0 u</strong></div>
+        <div class="lidar-cell"><span>RIGHT</span><strong id="lidar-right">25.0 u</strong></div>
+        <div class="lidar-cell"><span>DOWN</span><strong id="lidar-down">5.0 u</strong></div>
+      </div>
+      <p class="muted">Avoidance: <strong id="lidar-avoidance">CLEAR</strong></p>
+      <button type="button" id="lidar-beams" class="input-btn">Hide LiDAR beams (L)</button>
+      <p class="muted">Simulated rays and assisted braking; not guaranteed to prevent every collision.</p>
+    </section>
+
+    <section id="weather-panel" class="hud-panel" aria-label="Simulated weather and wind">
+      <h2 class="section-title"><span>Weather engine</span><span class="mini-tag">SIMULATED</span></h2>
+      <div class="wind"><strong id="weather-label">CLEAR</strong><span>Wind: <strong id="weather-wind">0.0 u/s</strong></span></div>
+      <p id="weather-hint" class="muted">Clear skies with very light wind</p>
+      <button id="weather-toggle" class="input-btn" type="button">Change weather (V) — CLEAR</button>
+    </section>
+  </aside>
+
+  <div id="fpv-overlay" aria-label="Camera capture overlay">
+    <span id="fpv-overlay-live"><span class="tiny-led"></span> FLIGHT CAMERA</span>
+    <span id="fpv-overlay-metrics">GIMBAL −12° · ZOOM 1.0×</span>
+    <span id="fpv-overlay-rec" hidden>● REC 00:00</span>
+  </div>
+
+  <nav id="action-dock" class="glass" aria-label="Quick flight actions">
+    <button id="camera-toggle" class="dock-btn" type="button">◉ <span>Switch to FPV (C)</span></button>
+    <button id="rth-toggle" class="dock-btn" type="button">⌂ <span>Return home (H)</span></button>
+    <span class="dock-separator" aria-hidden="true"></span>
+    <button id="snapshot-button" class="dock-btn" type="button">▣ <span>Photo (P)</span></button>
+    <button id="record-toggle" class="dock-btn primary" type="button">● <span>Record (O)</span></button>
+  </nav>
+
+  <div id="battery-warning" role="status" aria-live="polite"></div>
+  <div id="damage-warning" role="status" aria-live="polite"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <footer id="author-credit"><b>Developed by Yug Garg</b></footer>
+
+  <script>
+    // Layout toggles are UI-only: main.js retains full flight and recording functionality.
+    (() => {
+      const left = document.getElementById('left-rail');
+      const right = document.getElementById('right-hud');
+      const mapButton = document.getElementById('toggle-map');
+      const instrumentButton = document.getElementById('toggle-instruments');
+      const focusButton = document.getElementById('toggle-focus');
+      function updateLayout() {
+        const leftOpen = !document.body.classList.contains('hide-left');
+        const rightOpen = !document.body.classList.contains('hide-right');
+        left.inert = !leftOpen;
+        right.inert = !rightOpen;
+        mapButton.setAttribute('aria-expanded', String(leftOpen));
+        instrumentButton.setAttribute('aria-expanded', String(rightOpen));
+        const focused = !leftOpen && !rightOpen;
+        focusButton.setAttribute('aria-pressed', String(focused));
+        focusButton.textContent = focused ? '⛶ Exit focus' : '⛶ Focus view';
+      }
+      mapButton.addEventListener('click', () => { document.body.classList.toggle('hide-left'); updateLayout(); });
+      instrumentButton.addEventListener('click', () => { document.body.classList.toggle('hide-right'); updateLayout(); });
+      focusButton.addEventListener('click', () => {
+        const focused = document.body.classList.contains('hide-left') && document.body.classList.contains('hide-right');
+        document.body.classList.toggle('hide-left', !focused);
+        document.body.classList.toggle('hide-right', !focused);
+        updateLayout();
+      });
+      // Compact screens start in focus mode so the flight view remains usable.
+      if (window.innerWidth <= 600) document.body.classList.add('hide-left', 'hide-right');
+      updateLayout();
+      const recIndicator = document.getElementById('record-indicator');
+      const recText = document.getElementById('fpv-overlay-rec');
+      const pitch = document.getElementById('gimbal-pitch-value');
+      const zoom = document.getElementById('gimbal-zoom-value');
+      const metrics = document.getElementById('fpv-overlay-metrics');
+      function updateCameraOverlay() {
+        recText.hidden = getComputedStyle(recIndicator).display === 'none';
+        recText.textContent = '● ' + document.getElementById('record-timer').textContent;
+        metrics.textContent = 'GIMBAL ' + pitch.textContent + ' · ZOOM ' + zoom.textContent;
+      }
+      // Record timer is updated by the 3D animation loop. This overlay mirrors its values.
+      setInterval(updateCameraOverlay, 250);
+      updateCameraOverlay();
+    })();
+  </script>
+  <script>
+    window.addEventListener('error', event => {
+      const el = document.getElementById('error-display');
+      if (!el) return;
+      el.style.display = 'block';
+      el.textContent = `Simulator error: ${event.message}`;
+    });
+  </script>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
